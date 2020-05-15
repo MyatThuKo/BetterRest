@@ -8,14 +8,47 @@
 
 import SwiftUI
 
+struct BedTimeText: View {
+    var text: String
+    
+    var body: some View {
+        Text(text)
+            .font(.system(size: 23, design: .monospaced))
+            .foregroundColor(.black)
+            .fontWeight(.bold)
+    }
+}
+
 struct ContentView: View {
     @State private var wakeUp = defaultWakeUpTime
     @State private var sleepAmount = 8.0
     @State private var coffeeAmount = 1
     
-    @State private var alertTitle = ""
-    @State private var alertMessage = ""
-    @State private var showAlert = false
+    var calculatedBedTime: String {
+        var idealBedTime: String = ""
+        let model = SleepCalculator()
+        
+        let components =
+            Calendar.current.dateComponents([.hour, .minute], from: wakeUp)
+        
+        let hour = (components.hour ?? 0) * 60 * 60
+        let minute = (components.minute ?? 0) * 60
+        
+        do {
+            let prediction = try model.prediction(wake: Double(hour + minute), estimatedSleep: sleepAmount, coffee: Double(coffeeAmount))
+            
+            let sleepTime = wakeUp - prediction.actualSleep
+            
+            let formatter = DateFormatter()
+            formatter.timeStyle = .short
+            
+            idealBedTime = formatter.string(from: sleepTime)
+        } catch {
+            idealBedTime = "Sorry, there was a problem calculating your bedtime."
+        }
+        
+        return idealBedTime
+    }
     
     var body: some View {
         NavigationView {
@@ -36,30 +69,29 @@ struct ContentView: View {
                     Stepper(value: $sleepAmount, in: 4...12, step: 0.25) {
                         Text("\(sleepAmount, specifier: "%g") hours")
                     }
-                    
-                    Text("Daily cups of coffee")
-                        .font(.headline)
-                    
-                    Stepper(value: $coffeeAmount, in: 1...20) {
-                        if coffeeAmount == 1 {
-                            Text("1 cup")
+                }
+                
+                Picker("Select the cups of coffee", selection: $coffeeAmount) {
+                    ForEach(1..<21) { amount in
+                        if amount == 1 {
+                            Text("\(amount) cup")
                         } else {
-                            Text("\(coffeeAmount) cups")
+                            Text("\(amount) cups")
+                        }
+                    }
+                }
+                
+                ZStack{
+                    LinearGradient(gradient: Gradient(colors: [.blue, .green]), startPoint: .top, endPoint: .bottom)
+                    VStack(alignment: .center, spacing: 100) {
+                        Section(header: BedTimeText(text: "Your ideal bed time...")){
+                            BedTimeText(text: "\(calculatedBedTime)")
+                            Spacer()
                         }
                     }
                 }
             }
             .navigationBarTitle("BetterRest")
-            .navigationBarItems(trailing:
-                Button(action: calculateBedTime) {
-                    Text("Calculate")
-                }
-            )
-                .alert(isPresented: $showAlert) {
-                    Alert(title: Text(alertTitle),
-                          message: Text(alertMessage),
-                          dismissButton: .default(Text("Okay!")))
-            }
         }
     }
     
@@ -68,33 +100,6 @@ struct ContentView: View {
         components.hour = 7
         components.minute = 0
         return Calendar.current.date(from: components) ?? Date()
-    }
-    
-    func calculateBedTime() {
-        let model = SleepCalculator()
-        
-        let components =
-            Calendar.current.dateComponents([.hour, .minute], from: wakeUp)
-        
-        let hour = (components.hour ?? 0) * 60 * 60
-        let minute = (components.minute ?? 0) * 60
-        
-        do {
-            let prediction = try model.prediction(wake: Double(hour + minute), estimatedSleep: sleepAmount, coffee: Double(coffeeAmount))
-            
-            let sleepTime = wakeUp - prediction.actualSleep
-            
-            let formatter = DateFormatter()
-            formatter.timeStyle = .short
-            
-            alertMessage = formatter.string(from: sleepTime)
-            alertTitle = "Your ideal bedtime is..."
-        } catch {
-            alertTitle = "Error"
-            alertMessage = "Sorry, there was a problem calculating your bedtime."
-        }
-        
-        showAlert = true
     }
 }
 
